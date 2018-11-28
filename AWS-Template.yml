@@ -1,0 +1,722 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS WP EC2 RDS ALB VPC 
+
+Parameters:
+#パラメーターの入力時の煩雑さ解消の為に頭に数字を付与
+
+#プロジェクト名称
+  00ProjectId:
+    Description: Project name id.
+    Type: String
+    MinLength: '3'
+    MaxLength: '10'
+    Default: PID00
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: Project id.
+#使用する暗号鍵
+  01KeyName:
+    Description: Select the key
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+#インスタンスへのアクセスを許可するIPの指定
+  01SSHtoIP:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+
+#DB周り、頭は02
+#DB名称
+  02DBName:
+    Default: wordpressdb
+    Description: The WordPress database name
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+#DBrootuser
+  02DBMasterUserName:
+    Description: The WordPress database admin account username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: 1~16
+    Default: AR15
+#DBrootPW
+  02DBMasterPassword:
+    Description: The WordPress database admin account password
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: 8~41
+    Default: 556556556
+#WPに使用するテーブル名の頭
+  02TableP:
+    Description: The WordPress database Table P
+    Type: String
+    Default: wp_
+
+#WP Key
+#Keyの入力欄
+  WPKeys64AUTHKEY:
+    Description: AUTH_KEY https://api.wordpress.org/secret-key/1.1/salt/
+    Type: String
+    MinLength: '64'
+    MaxLength: '64'
+    Default: 6464646464646464646464646464646464646464646464646464646464646464
+
+  WPKeys64SECUREAUTHKEY:
+    Description: SECURE_AUTH_KEY https://api.wordpress.org/secret-key/1.1/salt/
+    Type: String
+    MinLength: '64'
+    MaxLength: '64'
+    Default: 6464646464646464646464646464646464646464646464646464646464646464
+
+  WPKeys64LOGGEDINKEY:
+    Description: LOGGED_IN_KEY https://api.wordpress.org/secret-key/1.1/salt/
+    Type: String
+    MinLength: '64'
+    MaxLength: '64'
+    Default: 6464646464646464646464646464646464646464646464646464646464646464
+
+  WPKeys64NONCEKEY:
+    Description: NONCE_KEY https://api.wordpress.org/secret-key/1.1/salt/
+    Type: String
+    MinLength: '64'
+    MaxLength: '64'
+    Default: 6464646464646464646464646464646464646464646464646464646464646464
+
+  WPKeys64AUTHSALT:
+    Description: AUTH_SALT https://api.wordpress.org/secret-key/1.1/salt/
+    Type: String
+    MinLength: '64'
+    MaxLength: '64'
+    Default: 6464646464646464646464646464646464646464646464646464646464646464
+
+  WPKeys64SECUREAUTHSALT:
+    Description: SECURE_AUTH_SALT https://api.wordpress.org/secret-key/1.1/salt/
+    Type: String
+    MinLength: '64'
+    MaxLength: '64'
+    Default: 6464646464646464646464646464646464646464646464646464646464646464
+
+  WPKeys64LOGGEDINSALT:
+    Description: LOGGED_IN_SALT https://api.wordpress.org/secret-key/1.1/salt/
+    Type: String
+    MinLength: '64'
+    MaxLength: '64'
+    Default: 6464646464646464646464646464646464646464646464646464646464646464
+
+  WPKeys64NONCESALT:
+    Description: NONCE_SALT https://api.wordpress.org/secret-key/1.1/salt/
+    Type: String
+    MinLength: '64'
+    MaxLength: '64'
+    Default: 6464646464646464646464646464646464646464646464646464646464646464
+
+
+
+
+
+# 上は事前　下は実装
+
+Resources:
+  APS01: #EC2インスタンス　1代目　WEBサーバー
+    Type: AWS::EC2::Instance
+    Metadata: #現在は一括のコマンド等になっているができれば分けたい。 段階的な処理の実装
+      AWS::CloudFormation::Init:
+        config:
+          packages: #必要なパッケージのダウンロード
+            yum: 
+              php: []
+              php-mysql: []
+              httpd: []
+          sources: #WPのダウンロード
+            /var/www/html: 'http://wordpress.org/latest.tar.gz'
+          files:
+            /var/www/html/wordpress/wp-config.php: #WPのコンフィグ生成
+              content: !Sub |
+                <?php
+                /**
+                * The base configuration for WordPress
+                *
+                * The wp-config.php creation script uses this file during the
+                * installation. You don't have to use the web site, you can
+                * copy this file to "wp-config.php" and fill in the values.
+                *
+                * This file contains the following configurations:
+                *
+                * * MySQL settings
+                * * Secret keys
+                * * Database table prefix
+                * * ABSPATH
+                *
+                * @link https://codex.wordpress.org/Editing_wp-config.php
+                *
+                * @package WordPress
+                */
+                // ** MySQL settings - You can get this info from your web host ** //
+                /** The name of the database for WordPress */
+                define( 'DB_NAME', '${02DBName}' );
+                /** MySQL database username */
+                define( 'DB_USER', '${02DBMasterUserName}' );
+                /** MySQL database password */
+                define( 'DB_PASSWORD', '${02DBMasterPassword}' );
+                /** MySQL hostname */
+                define( 'DB_HOST', '${RDSBDmysql.Endpoint.Address}' );
+                /** Database Charset to use in creating database tables. */
+                define( 'DB_CHARSET', 'utf8' );
+                /** The Database Collate type. Don't change this if in doubt. */
+                define( 'DB_COLLATE', '' );
+                /**#@+
+                * Authentication Unique Keys and Salts.
+                *
+                * Change these to different unique phrases!
+                * You can generate these using the {@link https://api.wordpress.org/secret-key/1.1/salt/ WordPress.org secret-key service}
+                * You can change these at any point in time to invalidate all existing cookies. This will force all users to have to log in again.
+                *
+                * @since 2.6.0
+                */
+                define( 'AUTH_KEY',         '${WPKeys64AUTHKEY}');
+                define( 'SECURE_AUTH_KEY',  '${WPKeys64SECUREAUTHKEY}');
+                define( 'LOGGED_IN_KEY',    '${WPKeys64LOGGEDINKEY}');
+                define( 'NONCE_KEY',        '${WPKeys64NONCEKEY}');
+                define( 'AUTH_SALT',        '${WPKeys64AUTHSALT}');
+                define( 'SECURE_AUTH_SALT', '${WPKeys64SECUREAUTHSALT}');
+                define( 'LOGGED_IN_SALT',   '${WPKeys64LOGGEDINSALT}');
+                define( 'NONCE_SALT',       '${WPKeys64NONCESALT}');
+                /**#@-*/
+                /**
+                * WordPress Database Table prefix.
+                *
+                * You can have multiple installations in one database if you give each
+                * a unique prefix. Only numbers, letters, and underscores please!
+                */
+                $table_prefix = '${02TableP}';
+                /**
+                * For developers: WordPress debugging mode.
+                *
+                * Change this to true to enable the display of notices during development.
+                * It is strongly recommended that plugin and theme developers use WP_DEBUG
+                * in their development environments.
+                *
+                * For information on other constants that can be used for debugging,
+                * visit the Codex.
+                *
+                * @link https://codex.wordpress.org/Debugging_in_WordPress
+                */
+                define( 'WP_DEBUG', false );
+                /* That's all, stop editing! Happy blogging. */
+                /** Absolute path to the WordPress directory. */
+                if ( ! defined( 'ABSPATH' ) ) {
+                  define( 'ABSPATH', dirname( __FILE__ ) . '/' );
+                }
+                /** Sets up WordPress vars and included files. */
+                require_once( ABSPATH . 'wp-settings.php' );
+              mode: '000644'
+              owner: root
+              group: root
+            /etc/cfn/cfn-hup.conf: #使用する値の事前
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf: #読み込ませ
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.APS01.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -s ${AWS::StackId} -r APS01 --region ${AWS::Region}
+                runas=root
+              mode: '000400'
+              owner: root
+              group: root
+          services: #サービスの起動及び継続
+            sysvinit:
+              httpd:
+                enabled: 'true'
+                ensureRunning: 'true'
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+    Properties: #インスタンスの設定
+      ImageId: 'ami-00f9d04b3b3092052' #東京リージョンを前提でAmazonLinux2を指定
+      InstanceType: t2.micro
+      SubnetId: !Ref FOB01
+      AvailabilityZone: 'ap-northeast-1a'
+      KeyName: !Ref 01KeyName
+      SecurityGroupIds: 
+      - !GetAtt APSecurityGroup.GroupId
+      UserData: !Base64
+        Fn::Sub: |
+          #!/bin/bash -xe
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource APS01 --region ${AWS::Region}
+          /opt/aws/bin/cfn-hup || error_exit ''Failed to start cfn-hup''
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource APS01 --region ${AWS::Region}
+#---------------------------------------------------------------------------------------------------------------------
+  APS02: #EC2インスタンス　2代目　WEBサーバー
+    Type: AWS::EC2::Instance
+    Metadata: #現在は一括のコマンド等になっているができれば分けたい。
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum: 
+              php: []
+              php-mysql: []
+              httpd: []
+          sources:
+            /var/www/html: 'http://wordpress.org/latest.tar.gz'
+          files:
+            /var/www/html/wordpress/wp-config.php:
+              content: !Sub |
+                <?php
+                /**
+                * The base configuration for WordPress
+                *
+                * The wp-config.php creation script uses this file during the
+                * installation. You don't have to use the web site, you can
+                * copy this file to "wp-config.php" and fill in the values.
+                *
+                * This file contains the following configurations:
+                *
+                * * MySQL settings
+                * * Secret keys
+                * * Database table prefix
+                * * ABSPATH
+                *
+                * @link https://codex.wordpress.org/Editing_wp-config.php
+                *
+                * @package WordPress
+                */
+                // ** MySQL settings - You can get this info from your web host ** //
+                /** The name of the database for WordPress */
+                define( 'DB_NAME', '${02DBName}' );
+                /** MySQL database username */
+                define( 'DB_USER', '${02DBMasterUserName}' );
+                /** MySQL database password */
+                define( 'DB_PASSWORD', '${02DBMasterPassword}' );
+                /** MySQL hostname */
+                define( 'DB_HOST', '${RDSBDmysql.Endpoint.Address}' );
+                /** Database Charset to use in creating database tables. */
+                define( 'DB_CHARSET', 'utf8' );
+                /** The Database Collate type. Don't change this if in doubt. */
+                define( 'DB_COLLATE', '' );
+                /**#@+
+                * Authentication Unique Keys and Salts.
+                *
+                * Change these to different unique phrases!
+                * You can generate these using the {@link https://api.wordpress.org/secret-key/1.1/salt/ WordPress.org secret-key service}
+                * You can change these at any point in time to invalidate all existing cookies. This will force all users to have to log in again.
+                *
+                * @since 2.6.0
+                */
+                define( 'AUTH_KEY',         '${WPKeys64AUTHKEY}');
+                define( 'SECURE_AUTH_KEY',  '${WPKeys64SECUREAUTHKEY}');
+                define( 'LOGGED_IN_KEY',    '${WPKeys64LOGGEDINKEY}');
+                define( 'NONCE_KEY',        '${WPKeys64NONCEKEY}');
+                define( 'AUTH_SALT',        '${WPKeys64AUTHSALT}');
+                define( 'SECURE_AUTH_SALT', '${WPKeys64SECUREAUTHSALT}');
+                define( 'LOGGED_IN_SALT',   '${WPKeys64LOGGEDINSALT}');
+                define( 'NONCE_SALT',       '${WPKeys64NONCESALT}');
+                /**#@-*/
+                /**
+                * WordPress Database Table prefix.
+                *
+                * You can have multiple installations in one database if you give each
+                * a unique prefix. Only numbers, letters, and underscores please!
+                */
+                $table_prefix = '${02TableP}';
+                /**
+                * For developers: WordPress debugging mode.
+                *
+                * Change this to true to enable the display of notices during development.
+                * It is strongly recommended that plugin and theme developers use WP_DEBUG
+                * in their development environments.
+                *
+                * For information on other constants that can be used for debugging,
+                * visit the Codex.
+                *
+                * @link https://codex.wordpress.org/Debugging_in_WordPress
+                */
+                define( 'WP_DEBUG', false );
+                /* That's all, stop editing! Happy blogging. */
+                /** Absolute path to the WordPress directory. */
+                if ( ! defined( 'ABSPATH' ) ) {
+                  define( 'ABSPATH', dirname( __FILE__ ) . '/' );
+                }
+                /** Sets up WordPress vars and included files. */
+                require_once( ABSPATH . 'wp-settings.php' );
+              mode: '000644'
+              owner: root
+              group: root
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.APS02.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -s ${AWS::StackId} -r APS02 --region ${AWS::Region}
+                runas=root
+              mode: '000400'
+              owner: root
+              group: root
+          services:
+            sysvinit:
+              httpd:
+                enabled: 'true'
+                ensureRunning: 'true'
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+    Properties: 
+      ImageId: 'ami-00f9d04b3b3092052'
+      InstanceType: t2.micro
+      SubnetId: !Ref FOB02
+      AvailabilityZone: 'ap-northeast-1c'
+      KeyName: !Ref 01KeyName
+      SecurityGroupIds: 
+      - !GetAtt APSecurityGroup.GroupId
+      UserData: !Base64
+        Fn::Sub: |
+          #!/bin/bash -xe
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource APS02 --region ${AWS::Region}
+          /opt/aws/bin/cfn-hup || error_exit ''Failed to start cfn-hup''
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource APS02 --region ${AWS::Region}
+
+
+#EIP
+#EC2用のIPを取得と付与
+
+#-----APS01用-----
+  EIP01:
+    Type: "AWS::EC2::EIP"
+    Properties:
+      Domain: vpc
+
+  EIPecA1:
+    Type: AWS::EC2::EIPAssociation
+    Properties: 
+      AllocationId: !GetAtt EIP01.AllocationId
+      InstanceId: !Ref APS01
+#-----APS01用-----
+
+#-----APS02用-----
+  EIP02:
+    Type: "AWS::EC2::EIP"
+    Properties:
+      Domain: vpc
+
+  EIPecA2:
+    Type: AWS::EC2::EIPAssociation
+    Properties: 
+      AllocationId: !GetAtt EIP02.AllocationId
+      InstanceId: !Ref APS02
+#-----APS02用-----
+
+
+
+#RDS
+#WPに使用するDBインスタンスの立ち上げ
+  RDSBDmysql:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AvailabilityZone: 'ap-northeast-1a'
+      DBSubnetGroupName: !Ref RDSSNG
+      AllocatedStorage: '5'
+      DBInstanceClass: db.t2.micro
+      Engine: 'MySQL'
+      DBName: !Ref 02DBName
+      MasterUsername: !Ref 02DBMasterUserName
+      MasterUserPassword: !Ref 02DBMasterPassword
+      VPCSecurityGroups: 
+      - !GetAtt RDSmysqlSG.GroupId
+    DeletionPolicy: "Delete"
+    DependsOn: RDSSNG
+
+
+#-----------VPC--VPC--VPC--VPC-----------
+# Create VPC
+  CFVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      InstanceTenancy: default
+
+# Create Public RouteTable
+  CFPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CFVPC
+
+# Create Private RouteTable
+  CFPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CFVPC
+
+# Create Public Subnet A
+  FOB01:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CFVPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: 'ap-northeast-1a'
+
+  PubSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FOB01
+      RouteTableId: !Ref CFPublicRouteTable
+
+# Create Public Subnet C
+  FOB02:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CFVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: 'ap-northeast-1c'
+
+  PubSubnetCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FOB02
+      RouteTableId: !Ref CFPublicRouteTable
+
+# Create Private Subnet A
+  CP01:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CFVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: 'ap-northeast-1a'
+
+  PriSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref CP01
+      RouteTableId: !Ref CFPrivateRouteTable
+
+# Create Private Subnet C
+  CP02:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CFVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: 'ap-northeast-1c'
+
+  PriSubnetCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref CP02
+      RouteTableId: !Ref CFPrivateRouteTable
+
+
+# Create InternetGateway
+  SEABEE00GW:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Join [ '-', [ 'Ref':'00ProjectId' ,'IGW' ] ]
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref CFVPC
+      InternetGatewayId: !Ref SEABEE00GW
+
+  VPCRoute:
+    Type: AWS::EC2::Route
+    DependsOn: SEABEE00GW
+    Properties:
+      RouteTableId: !Ref CFPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SEABEE00GW
+#終わり-----------VPC--VPC--VPC--VPC-----------終わり
+
+#ELB
+#ALBを使用する
+  ElasticLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        -  !Ref FOB01
+        -  !Ref FOB02
+      Scheme: internet-facing
+      SecurityGroups: 
+        - !Ref ELBSG
+        - !Ref APSecurityGroup
+
+  TargetGroup: 
+      Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+      Properties: 
+        VpcId:
+          Ref: CFVPC
+        Protocol: HTTP
+        Port: 80
+        Matcher: 
+          HttpCode: 200
+        Targets: 
+          - Id: !Ref APS01
+            Port: 80
+          - Id: !Ref APS02
+            Port: 80
+
+
+#ELBSG
+#ロードバランサー用のセキュリティグループ
+  ELBSG:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: 'ELB Security Group'
+      VpcId:
+        Ref: CFVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+
+  ELB2L: 
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties: 
+      DefaultActions: 
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref ElasticLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+#APS向けセキュリティグループ　01　02　兼用
+  APSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'AP Security Group'
+      VpcId:
+        Ref: CFVPC
+      SecurityGroupIngress:
+      - CidrIp: 0.0.0.0/0
+        FromPort: '80'
+        IpProtocol: tcp
+        ToPort: '80'
+      - CidrIp: !Ref 01SSHtoIP
+        FromPort: '22'
+        IpProtocol: tcp
+        ToPort: '22'
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        SourceSecurityGroupId: !Ref ELBSG
+    DependsOn: ELBSG
+#----------------------------------
+
+#RDS用セキュリティグループ
+  RDSmysqlSG: 
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: 'RDS Security Group'
+      VpcId:
+        Ref: CFVPC    
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: '3306'
+          ToPort: '3306'
+          SourceSecurityGroupId: !Ref APSecurityGroup
+    DependsOn: APSecurityGroup
+
+#RDS DBSN
+#DB用のサブネットグループ プライベートに展開
+  RDSSNG: 
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties: 
+      DBSubnetGroupDescription: "TEST"
+      SubnetIds: 
+        -  !Ref CP01
+        -  !Ref CP02
+
+
+
+
+Outputs:
+  WPURL:
+    Description: WordPress Website
+    Value: !Join
+      - ''
+      - - 'http://'
+        - !GetAtt ElasticLoadBalancer.DNSName
+        - '/wordpress'
+
+
+  APS01saba:
+    Description: The ID of the APS
+    Value: !Ref APS01
+    Export:
+      Name: !Sub '${AWS::StackName}-APS01'
+
+  APS02saba:
+    Description: The ID of the APS
+    Value: !Ref APS02
+    Export:
+      Name: !Sub '${AWS::StackName}-APS02'
+
+  RDSBDmysqlDBN:
+    Description: The ID of the DBN
+    Value: !Ref RDSBDmysql
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSBDmysql'
+
+  StackVPC:
+    Description: The ID of the VPC
+    Value: !Ref CFVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCID'
+
+  FOB01SPS:
+    Description: The ID of the VPC Subnet
+    Value: !Ref FOB01
+    Export:
+      Name: !Sub '${AWS::StackName}-FOB01SPS'
+
+  FOB02SPS:
+    Description: The ID of the VPC Subnet
+    Value: !Ref FOB02
+    Export:
+      Name: !Sub '${AWS::StackName}-FOB02SPS'
+
+  CP01SPS:
+    Description: The ID of the VPC Subnet
+    Value: !Ref CP01
+    Export:
+      Name: !Sub '${AWS::StackName}-CP01SPS'
+
+  CP02SPS:
+    Description: The ID of the VPC Subnet
+    Value: !Ref CP02
+    Export:
+      Name: !Sub '${AWS::StackName}-CP02SPS'
